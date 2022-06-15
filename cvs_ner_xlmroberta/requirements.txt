@@ -1,0 +1,8 @@
+gunicorn==20.1.0
+rq==1.10.0
+torch==1.8.1
+transformers==4.4.2
+tensorboardX==1.9
+label-studio>=1.0.0
+sentencepiece==0.1.96
+git+https://github.com/heartexlabs/label-studio-ml-backend@master#egg=label-studio-ml

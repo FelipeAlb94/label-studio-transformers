@@ -4,6 +4,7 @@ import re
 import os
 import io
 import logging
+import gc
 
 from functools import partial
 from itertools import groupby
@@ -29,6 +30,10 @@ from utils import calc_slope
 
 logger = logging.getLogger(__name__)
 
+
+# ALL_MODELS = sum(
+#     [list(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, RobertaConfig, DistilBertConfig)],
+#     [])
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertForTokenClassification, BertTokenizer),
@@ -325,7 +330,7 @@ class TransformersBasedTagger(LabelStudioMLBase):
 
     def __init__(self, **kwargs):
         super(TransformersBasedTagger, self).__init__(**kwargs)
-
+        logger.debug(f"Init kwargs: {kwargs}")
         assert len(self.parsed_label_config) == 1
         self.from_name, self.info = list(self.parsed_label_config.items())[0]
         assert self.info['type'] == 'Labels'
@@ -340,13 +345,12 @@ class TransformersBasedTagger(LabelStudioMLBase):
         if not self.train_output:
             self.labels = self.info['labels']
         else:
+            logger.debug(f"Train output: {self.train_output}")
             self.load(self.train_output)
 
     def load(self, train_output):
         pretrained_model = train_output['model_path']
         self._model_type = train_output['model_type']
-        _, model_class, tokenizer_class = MODEL_CLASSES[train_output['model_type']]
-
         self._tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
         self._model = AutoModelForTokenClassification.from_pretrained(pretrained_model)
         self._batch_size = train_output['batch_size']
@@ -429,6 +433,8 @@ class TransformersBasedTagger(LabelStudioMLBase):
                     'score': float(mean_score),
                     'cluster': None
                 })
+        
+        gc.collect()
         return results
 
     def get_spans(self, completion):
@@ -451,8 +457,8 @@ class TransformersBasedTagger(LabelStudioMLBase):
         return spans
 
     def fit(
-        self, completions, workdir=None, model_type='bert', pretrained_model='neuralmind/bert-base-portuguese-cased',
-        batch_size=32, learning_rate=5e-5, adam_epsilon=1e-8, num_train_epochs=100, weight_decay=0.0, logging_steps=1,
+        self, completions, workdir=None, model_type='roberta', pretrained_model='xlm-roberta-base',
+        batch_size=8, learning_rate=5e-5, adam_epsilon=1e-8, num_train_epochs=100, weight_decay=0.0, logging_steps=1,
         warmup_steps=0, save_steps=50, dump_dataset=True, cache_dir='~/.heartex/cache', train_logs=None,
         **kwargs
     ):
@@ -463,8 +469,6 @@ class TransformersBasedTagger(LabelStudioMLBase):
         os.makedirs(cache_dir, exist_ok=True)
 
         model_type = model_type.lower()
-        # assert model_type in MODEL_CLASSES.keys(), f'Input model type {model_type} not in {MODEL_CLASSES.keys()}'
-        # assert pretrained_model in ALL_MODELS, f'Pretrained model {pretrained_model} not in {ALL_MODELS}'
 
         tokenizer = AutoTokenizer.from_pretrained(pretrained_model, cache_dir=cache_dir)
 
@@ -538,7 +542,7 @@ class TransformersBasedTagger(LabelStudioMLBase):
                 model_output = model(**inputs)
                 loss = model_output[0]
                 loss.backward()
-                tr_loss += loss.item()
+                tr_loss += loss.detach().item()
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
@@ -567,6 +571,7 @@ class TransformersBasedTagger(LabelStudioMLBase):
         tokenizer.save_pretrained(workdir)
         label_map = {i: t for t, i in train_set.tag_idx_map.items()}
 
+        gc.collect()
         return {
             'model_path': workdir,
             'batch_size': batch_size,
