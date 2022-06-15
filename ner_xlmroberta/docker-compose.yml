@@ -9,6 +9,9 @@ services:
       - "./data/redis:/data"
     expose:
       - 6379
+    deploy:
+      replicas: 1
+      
   server:
     container_name: xlm-roberta-cvs
     build: .
@@ -27,3 +30,5 @@ services:
     volumes:
       - "./data/server:/data"
       - "./logs:/tmp"
+    deploy:
+      replicas: 1
