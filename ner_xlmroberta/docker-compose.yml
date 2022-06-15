@@ -11,6 +11,7 @@ services:
       - 6379
     deploy:
       replicas: 1
+    restart: always
       
   server:
     container_name: xlm-roberta-cvs
@@ -32,3 +33,4 @@ services:
       - "./logs:/tmp"
     deploy:
       replicas: 1
+    restart: always
